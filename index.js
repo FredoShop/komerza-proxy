@@ -35,6 +35,22 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ ok: true, service: 'komerza-eu-proxy' }));
     }
+    // Test the proxy -> Komerza path directly (no auth needed; hits a harmless endpoint).
+    // Open /komerza-test in your browser: if you see Komerza JSON or a normal error,
+    // the proxy's IP is NOT region-blocked. If you see "Service unavailable in your
+    // region", then Render's region IS blocked and you must move the proxy elsewhere.
+    if (req.url === '/komerza-test') {
+      try {
+        const r = await fetch('https://api.komerza.com/', { headers: { 'origin': 'https://dashboard.komerza.com' } });
+        const t = await r.text();
+        const blocked = /unavailable in your region|regulatory restrictions/i.test(t);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ komerzaStatus: r.status, regionBlocked: blocked, sample: t.slice(0, 200) }));
+      } catch (e) {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ ok: false, error: String(e).slice(0, 200) }));
+      }
+    }
     // Auth
     if (!SECRET || req.headers['x-proxy-secret'] !== SECRET) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
